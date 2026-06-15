@@ -1,0 +1,7 @@
+streamlit>=1.32
+yfinance>=0.2.40
+pandas>=2.0
+numpy>=1.24
+statsmodels>=0.14
+requests>=2.31
+python-docx>=1.1
