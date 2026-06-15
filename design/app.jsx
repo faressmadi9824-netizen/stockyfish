@@ -106,8 +106,10 @@ function App() {
       {tweaks.showTape && <TickerTape items={window.tape} />}
       <Toolbar ticker={ticker} onTickerChange={setTicker} watchlist={window.watchlist}
                theme={theme} onToggleTheme={toggleTheme} />
-      <Hero data={d} fundamentals={f} themeKey={theme} years={5} />
-      <FundamentalsStrip f={f} price={d.lastPrice} />
+      <TabErrorBoundary>
+        <Hero data={d} fundamentals={f} themeKey={theme} years={5} />
+        <FundamentalsStrip f={f} price={d.lastPrice} />
+      </TabErrorBoundary>
       <TabsBar tabs={tabs} active={active} onChange={setActive} meta={tabMeta} />
 
       <div>

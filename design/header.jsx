@@ -200,9 +200,12 @@ window.Hero = Hero;
 // Fundamentals strip (compact, 3 sections)
 // ─────────────────────────────────────────────────────────────
 function FundamentalsStrip({ f, price }) {
-  const upside = f.targetMeanPrice / price - 1;
   const fmtX  = (v, d = 1) => v == null ? '—' : `${v.toFixed(d)}×`;
   const fmtP  = (v, d = 1) => v == null ? '—' : `${(v * 100).toFixed(d)}%`;
+  const fmtD  = (v, d = 2) => v == null ? '—' : `$${v.toFixed(d)}`;
+  const fmtG  = (v, d = 1) => v == null ? '—' : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(d)}%`;
+  const cls   = (v) => v == null ? '' : (v >= 0 ? 'pos' : 'neg');
+  const upside = (f.targetMeanPrice != null && price) ? f.targetMeanPrice / price - 1 : null;
   const fmtM  = (v) => {
     if (v == null) return '—';
     if (v >= 1e12) return `$${(v/1e12).toFixed(2)}T`;
@@ -236,15 +239,13 @@ function FundamentalsStrip({ f, price }) {
           <span className="section-sub">TRAILING TWELVE MONTHS</span>
         </div>
         <div className="grid grid-7">
-          <Metric label="Rev Growth" value={`${f.revenueGrowth >= 0 ? '+' : ''}${(f.revenueGrowth * 100).toFixed(1)}%`}
-                  cls={f.revenueGrowth >= 0 ? 'pos' : 'neg'} sub="yoy" />
-          <Metric label="EPS Growth" value={`${f.earningsGrowth >= 0 ? '+' : ''}${(f.earningsGrowth * 100).toFixed(1)}%`}
-                  cls={f.earningsGrowth >= 0 ? 'pos' : 'neg'} sub="yoy" />
+          <Metric label="Rev Growth" value={fmtG(f.revenueGrowth)} cls={cls(f.revenueGrowth)} sub="yoy" />
+          <Metric label="EPS Growth" value={fmtG(f.earningsGrowth)} cls={cls(f.earningsGrowth)} sub="yoy" />
           <Metric label="Gross Margin" value={fmtP(f.grossMargins)} sub="" />
           <Metric label="Oper Margin" value={fmtP(f.operatingMargins)} sub="" />
           <Metric label="Net Margin" value={fmtP(f.profitMargins)} sub="ttm" />
           <Metric label="ROE" value={fmtP(f.returnOnEquity)} sub="return on equity" />
-          <Metric label="D/E" value={fmtX(f.debtToEquity / 100, 2)} sub="total / equity" />
+          <Metric label="D/E" value={fmtX(f.debtToEquity != null ? f.debtToEquity / 100 : null, 2)} sub="total / equity" />
         </div>
       </div>
 
@@ -252,17 +253,19 @@ function FundamentalsStrip({ f, price }) {
         <div className="section-head">
           <span className="section-num">§03</span>
           <h2 className="section-title">Analyst &amp; Technical</h2>
-          <span className="section-sub">{f.numberOfAnalystOpinions} ANALYSTS · BUY CONSENSUS</span>
+          <span className="section-sub">{f.numberOfAnalystOpinions ?? '—'} ANALYSTS · BUY CONSENSUS</span>
         </div>
         <div className="grid grid-7">
-          <Metric label="EPS (TTM)" value={`$${f.trailingEps.toFixed(2)}`} sub="" />
-          <Metric label="Fwd EPS" value={`$${f.forwardEps.toFixed(2)}`} sub="ntm" />
-          <Metric label="Price Target" value={`$${f.targetMeanPrice.toFixed(2)}`} sub="analyst mean" />
-          <Metric label="Upside" value={`${upside >= 0 ? '+' : ''}${(upside * 100).toFixed(1)}%`}
-                  cls={upside >= 0 ? 'pos' : 'neg'} sub={`${f.numberOfAnalystOpinions} analysts`} />
-          <Metric label="Consensus" value="BUY" sub={f.averageAnalystRating} cls="pos" />
-          <Metric label="52W High" value={`$${f.fiftyTwoWeekHigh.toFixed(2)}`} sub={`${(((price / f.fiftyTwoWeekHigh) - 1) * 100).toFixed(1)}% from high`} />
-          <Metric label="52W Low" value={`$${f.fiftyTwoWeekLow.toFixed(2)}`} sub={`+${(((price / f.fiftyTwoWeekLow) - 1) * 100).toFixed(1)}% off low`} />
+          <Metric label="EPS (TTM)" value={fmtD(f.trailingEps)} sub="" />
+          <Metric label="Fwd EPS" value={fmtD(f.forwardEps)} sub="ntm" />
+          <Metric label="Price Target" value={fmtD(f.targetMeanPrice)} sub="analyst mean" />
+          <Metric label="Upside" value={fmtG(upside)}
+                  cls={cls(upside)} sub={`${f.numberOfAnalystOpinions ?? '—'} analysts`} />
+          <Metric label="Consensus" value="BUY" sub={f.averageAnalystRating || ''} cls="pos" />
+          <Metric label="52W High" value={fmtD(f.fiftyTwoWeekHigh)}
+                  sub={f.fiftyTwoWeekHigh != null && price ? `${(((price / f.fiftyTwoWeekHigh) - 1) * 100).toFixed(1)}% from high` : ''} />
+          <Metric label="52W Low" value={fmtD(f.fiftyTwoWeekLow)}
+                  sub={f.fiftyTwoWeekLow != null && price ? `+${(((price / f.fiftyTwoWeekLow) - 1) * 100).toFixed(1)}% off low` : ''} />
         </div>
       </div>
     </div>
