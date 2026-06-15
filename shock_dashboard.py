@@ -1325,4 +1325,17 @@ with st.spinner(f"Rendering {ticker}…"):
                        js_quant=_js_quant, js_fund_history=_js_fund_hist,
                        js_credit=_js_credit, js_industry=_js_industry)
 
-components.html(_html, height=2200, scrolling=False)
+def embed_html(html: str, height: int) -> None:
+    """Embed a self-contained HTML document in an iframe.
+
+    Prefers st.iframe (the supported API as of Streamlit 1.58); falls back to
+    the deprecated st.components.v1.html on older Streamlit versions so the app
+    still runs locally on an older install.
+    """
+    if hasattr(st, "iframe"):
+        st.iframe(html, height=height)
+    else:
+        components.html(html, height=height, scrolling=False)
+
+
+embed_html(_html, 2200)
