@@ -34,6 +34,7 @@ import io
 import math
 import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
@@ -46,8 +47,20 @@ import streamlit as st
 import streamlit.components.v1 as components
 import yfinance as yf
 
+# yfinance caches timezone data to disk. Its default location (~/.cache) isn't
+# writable on some hosts (e.g. Streamlit Community Cloud), which can make the
+# .info / quoteSummary endpoint fail even though price downloads still work —
+# the usual cause of "chart loads but all fundamentals are blank" in the cloud.
+# Point the cache at /tmp so fundamentals load there too.
+try:
+    os.makedirs("/tmp/py-yfinance", exist_ok=True)
+    yf.set_tz_cache_location("/tmp/py-yfinance")
+except Exception:
+    pass
+
 from design_renderer import (build_html, to_js_data, to_js_fundamentals,
                              to_js_industry, to_js_tape)
+from macro_data import to_js_macro
 from quant_signals import (build_quant_payload, extract_earnings_drivers,
                            fetch_credit_metrics, fetch_fundamental_history,
                            fetch_sec_filing_sections)
@@ -268,10 +281,31 @@ def recompute_price_to_book(ticker: str, info: dict, market_cap) -> float | None
     return _price_to_book(market_cap, equity, fx)
 
 
+def _fetch_info(ticker: str, attempts: int = 3) -> dict:
+    """Fetch yfinance .info with retries. Yahoo's quoteSummary endpoint is
+    aggressively rate-limited from shared cloud IPs, so retry with backoff and
+    treat an empty/marketCap-less payload as a miss worth retrying."""
+    for i in range(attempts):
+        try:
+            info = yf.Ticker(ticker).info
+            if info and info.get("marketCap") is not None:
+                return info
+        except Exception:
+            pass
+        time.sleep(0.7 * (i + 1))
+    # Last-ditch: return whatever we have (may be partial) rather than nothing.
+    try:
+        return yf.Ticker(ticker).info or {}
+    except Exception:
+        return {}
+
+
 @st.cache_data(show_spinner=False, ttl=60 * 60 * 4)
 def get_ticker_info(ticker: str) -> dict:
     try:
-        info = yf.Ticker(ticker).info
+        info = _fetch_info(ticker)
+        if not info:
+            return {}
         market_cap = info.get("marketCap")
         raw_ev     = info.get("enterpriseValue")
         # Sanity-check EV: yfinance occasionally returns garbage values for
@@ -1306,6 +1340,13 @@ with st.spinner(f"Rendering {ticker}…"):
         st.warning(f"Industry analysis computation failed: {_exc}")
         _js_industry = {}
 
+    # Macro economics — G7 yields + GDP (cached inside macro_data)
+    try:
+        _js_macro = to_js_macro()
+    except Exception as _exc:
+        st.warning(f"Macro data computation failed: {_exc}")
+        _js_macro = {}
+
     # Diagnostic line — shows whether each payload actually has data
     _fh_metrics = (_js_fund_hist or {}).get("metrics", {})
     _n_fund = sum(1 for v in _fh_metrics.values()
@@ -1323,7 +1364,8 @@ with st.spinner(f"Rendering {ticker}…"):
     st.sidebar.caption(f"SIGNALS DIAG · {_diag}")
     _html = build_html(_js_data, _js_fund, _js_tape, _WATCHLIST, _research, ticker,
                        js_quant=_js_quant, js_fund_history=_js_fund_hist,
-                       js_credit=_js_credit, js_industry=_js_industry)
+                       js_credit=_js_credit, js_industry=_js_industry,
+                       js_macro=_js_macro)
 
 def embed_html(html: str, height: int) -> None:
     """Embed a self-contained HTML document in an iframe.

@@ -434,6 +434,7 @@ def build_html(
     js_fund_history: dict | None = None,
     js_credit: dict | None = None,
     js_industry: dict | None = None,
+    js_macro: dict | None = None,
 ) -> str:
     css       = _read("styles.css")
     charts    = _read("charts.jsx")
@@ -451,6 +452,7 @@ def build_html(
     fh_json     = json.dumps(js_fund_history or {}, ensure_ascii=False)
     credit_json = json.dumps(js_credit or {},       ensure_ascii=False)
     industry_json = json.dumps(js_industry or {},   ensure_ascii=False)
+    macro_json    = json.dumps(js_macro or {},       ensure_ascii=False)
 
     return f"""<!doctype html>
 <html lang="en" data-theme="light">
@@ -489,6 +491,7 @@ def build_html(
       window.fundHistory  = {fh_json};
       window.credit       = {credit_json};
       window.industry     = {industry_json};
+      window.macro        = {macro_json};
       try {{
         console.log('[shockdev] quant sections:',
           Object.keys(window.quant).filter(function(k) {{ return window.quant[k] && Object.keys(window.quant[k]).length; }}),
