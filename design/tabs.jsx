@@ -1255,3 +1255,297 @@ function IndustryTab() {
   );
 }
 window.IndustryTab = IndustryTab;
+
+// ─────────────────────────────────────────────────────────────
+// MACRO ECONOMICS TAB — G7 yield curves + GDP / growth
+// ─────────────────────────────────────────────────────────────
+function MacroCurveChart({ curve, color }) {
+  const W = 720, H = 300, padL = 46, padR = 16, padT = 18, padB = 34;
+  const pts = (curve || []).filter(p => p.y != null);
+  if (pts.length < 2) {
+    return <div className="interp">Not enough data to plot this curve.</div>;
+  }
+  const ys = pts.map(p => p.y);
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  const pad = (hi - lo) * 0.2 || 0.5; lo -= pad; hi += pad;
+  const n = pts.length;
+  const x = i => padL + (i / (n - 1)) * (W - padL - padR);
+  const y = v => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
+  const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.y).toFixed(1)}`).join(' ');
+  const gridY = [0, 0.25, 0.5, 0.75, 1].map(f => lo + f * (hi - lo));
+  return (
+    <svg className="chart-svg" viewBox={`0 0 ${W} ${H}`} role="img">
+      {gridY.map((g, i) => (
+        <g key={i}>
+          <line x1={padL} x2={W - padR} y1={y(g)} y2={y(g)} stroke="var(--line-soft)" strokeWidth="1" />
+          <text x={padL - 8} y={y(g) + 3} textAnchor="end" fontSize="10"
+                fill="var(--muted)" fontFamily="IBM Plex Mono, monospace">{g.toFixed(1)}</text>
+        </g>
+      ))}
+      <path d={path} fill="none" stroke={color} strokeWidth="2" />
+      {pts.map((p, i) => (
+        <g key={i}>
+          <circle cx={x(i)} cy={y(p.y)} r="4"
+                  fill={p.interp ? 'var(--bg-card)' : color}
+                  stroke={color} strokeWidth="2" />
+          <text x={x(i)} y={H - 18} textAnchor="middle" fontSize="11"
+                fill="var(--muted)" fontFamily="IBM Plex Mono, monospace">{p.tenor}</text>
+          <text x={x(i)} y={y(p.y) - 9} textAnchor="middle" fontSize="9.5"
+                fill="var(--fg-soft)" fontFamily="IBM Plex Mono, monospace">{p.y.toFixed(2)}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function MacroGrowthChart({ series }) {
+  const W = 720, H = 220, padL = 36, padR = 12, padT = 14, padB = 26;
+  const pts = (series || []).filter(p => p.growth != null);
+  if (!pts.length) return <div className="interp">No growth data.</div>;
+  const gs = pts.map(p => p.growth);
+  const lo = Math.min(0, ...gs), hi = Math.max(0, ...gs);
+  const n = pts.length, bw = (W - padL - padR) / n * 0.62;
+  const x = i => padL + (i + 0.5) / n * (W - padL - padR);
+  const y = v => padT + (1 - (v - lo) / (hi - lo || 1)) * (H - padT - padB);
+  const zeroY = y(0);
+  return (
+    <svg className="chart-svg" viewBox={`0 0 ${W} ${H}`} role="img">
+      <line x1={padL} x2={W - padR} y1={zeroY} y2={zeroY} stroke="var(--line)" strokeWidth="1" />
+      {pts.map((p, i) => {
+        const yy = y(p.growth);
+        const top = Math.min(yy, zeroY), h = Math.abs(yy - zeroY);
+        const col = p.growth >= 0 ? 'var(--pos)' : 'var(--neg)';
+        return (
+          <g key={i}>
+            <rect x={x(i) - bw / 2} y={top} width={bw} height={Math.max(h, 0.5)}
+                  fill={col} opacity={p.proj ? 0.4 : 0.95} />
+            <text x={x(i)} y={H - 8} textAnchor="middle" fontSize="9"
+                  fill="var(--muted)" fontFamily="IBM Plex Mono, monospace">{`'${String(p.year).slice(2)}`}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+const TENOR_COLORS = ['#7fb0a0', '#3a9d86', '#d9a400', '#c1471a', '#7a4dab', '#1f4e3d'];
+
+function MacroHistoryChart({ history }) {
+  const W = 960, H = 340, padL = 44, padR = 14, padT = 14, padB = 28;
+  const series = (history && history.series) || [];
+  const tenors = (history && history.tenors) || [];
+  if (series.length < 2) return <div className="interp">No rate history available.</div>;
+  const tnum = d => { const p = d.split('-'); return (+p[0]) + (+p[1] - 1) / 12; };
+  const xs = series.map(s => tnum(s.d));
+  const xmin = xs[0], xmax = xs[xs.length - 1];
+  let lo = Infinity, hi = -Infinity;
+  series.forEach(s => tenors.forEach(t => {
+    const v = s.vals[t]; if (v != null) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  }));
+  lo = Math.min(lo, 0); hi = hi * 1.05;
+  const X = v => padL + ((v - xmin) / (xmax - xmin)) * (W - padL - padR);
+  const Y = v => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
+  const recs = history.recessions || [];
+  const years = []; for (let y = Math.ceil(xmin / 5) * 5; y <= xmax; y += 5) years.push(y);
+  const gridY = [0, 0.25, 0.5, 0.75, 1].map(f => lo + f * (hi - lo));
+  const linePath = t => {
+    let d = '', started = false;
+    series.forEach(s => {
+      const v = s.vals[t]; if (v == null) return;
+      d += (started ? 'L' : 'M') + X(tnum(s.d)).toFixed(1) + ',' + Y(v).toFixed(1);
+      started = true;
+    });
+    return d;
+  };
+  return (
+    <svg className="chart-svg" viewBox={`0 0 ${W} ${H}`} role="img">
+      {recs.map((r, i) => {
+        const x1 = X(tnum(r.start)), x2 = X(tnum(r.end));
+        return <rect key={i} x={x1} y={padT} width={Math.max(x2 - x1, 1.5)}
+                     height={H - padT - padB} fill="var(--muted)" opacity="0.18" />;
+      })}
+      {gridY.map((g, i) => (
+        <g key={i}>
+          <line x1={padL} x2={W - padR} y1={Y(g)} y2={Y(g)} stroke="var(--line-soft)" strokeWidth="1" />
+          <text x={padL - 6} y={Y(g) + 3} textAnchor="end" fontSize="9.5"
+                fill="var(--muted)" fontFamily="IBM Plex Mono, monospace">{g.toFixed(1)}</text>
+        </g>
+      ))}
+      {years.map((y, i) => (
+        <text key={i} x={X(y)} y={H - 9} textAnchor="middle" fontSize="9.5"
+              fill="var(--muted)" fontFamily="IBM Plex Mono, monospace">{y}</text>
+      ))}
+      {tenors.map((t, i) => (
+        <path key={t} d={linePath(t)} fill="none"
+              stroke={TENOR_COLORS[i % TENOR_COLORS.length]} strokeWidth="1.4" opacity="0.92" />
+      ))}
+    </svg>
+  );
+}
+
+const G7_COLORS = {
+  US: '#1f4e3d', CA: '#c1471a', GB: '#3a5fa8', DE: '#8a6d1f',
+  FR: '#5b3a8a', IT: '#2a7d6f', JP: '#a83a5b', GLOBAL: '#444',
+};
+
+function MacroTab() {
+  const macro = window.macro || {};
+  const countries = macro.countries || [];
+  const [sel, setSel] = useStateT(countries[0] ? countries[0].code : 'US');
+
+  if (!countries.length) {
+    return (
+      <div className="container">
+        <div className="interp" style={{ marginTop: 28 }}>
+          Macro data is unavailable. Add a free FRED API key (FRED_API_KEY in
+          Streamlit secrets) to load live G7 yields and GDP.
+        </div>
+      </div>
+    );
+  }
+
+  const isGlobal = sel === 'GLOBAL';
+  const selCountry = countries.find(c => c.code === sel) || countries[0];
+  const curve = isGlobal ? (macro.global && macro.global.curve) : selCountry.curve;
+  const color = G7_COLORS[sel] || 'var(--primary)';
+  const gdpSel = (macro.gdp || []).find(g => g.code === sel);
+  const weights = (macro.global && macro.global.weights) || {};
+
+  const tabBtn = (active, code) => ({
+    fontFamily: 'IBM Plex Mono, monospace', fontSize: 10.5, letterSpacing: '0.06em',
+    padding: '6px 12px', cursor: 'pointer', borderRadius: 3,
+    border: `1px solid ${active ? (G7_COLORS[code] || 'var(--accent)') : 'var(--line)'}`,
+    background: active ? (G7_COLORS[code] || 'var(--accent)') : 'var(--bg-card)',
+    color: active ? '#fff' : 'var(--muted)',
+  });
+
+  return (
+    <div className="container">
+      <div className="section" style={{ paddingTop: 28 }}>
+        <div className="section-head">
+          <span className="section-num">§08</span>
+          <h2 className="section-title">Macro · G7 Government Yield Curves</h2>
+          <span className="section-sub">
+            {macro.demo ? 'DEMO DATA · ADD FRED KEY FOR LIVE' : `AS OF ${macro.asOf || ''}`}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+          {countries.map(c => (
+            <button key={c.code} style={tabBtn(sel === c.code, c.code)}
+                    onClick={() => setSel(c.code)}>{c.code}</button>
+          ))}
+          <button style={tabBtn(isGlobal, 'GLOBAL')} onClick={() => setSel('GLOBAL')}>GDP-WTD GLOBAL</button>
+        </div>
+
+        <div className="interp" style={{ marginBottom: 12 }}>
+          {isGlobal
+            ? <span><strong>GDP-weighted global curve</strong> — each tenor is the G7 average weighted by GDP ({macro.global && macro.global.source}); weights re-normalise over the countries reporting that tenor.</span>
+            : <span><strong>{selCountry.name}</strong> — source: {selCountry.source}. Hollow points are <strong>interpolated</strong> between the country's reported tenors; filled points are reported.</span>}
+        </div>
+
+        <div className="chart">
+          <div className="chart-head">
+            <span className="chart-title">{isGlobal ? 'GDP-Weighted G7' : selCountry.name} Yield Curve</span>
+            <span className="chart-sub">government bond yield (%) by tenor</span>
+          </div>
+          <MacroCurveChart curve={curve} color={color} />
+        </div>
+      </div>
+
+      {macro.history && (macro.history.series || []).length > 1 && (
+        <div className="section">
+          <div className="section-head">
+            <span className="section-num">§08.1</span>
+            <h2 className="section-title">United States · Rates Through the Cycle</h2>
+            <span className="section-sub">MONTHLY · MAX HISTORY · GREY = NBER RECESSIONS</span>
+          </div>
+          <div className="interp" style={{ marginBottom: 12 }}>
+            Treasury yields by tenor over time, with <strong>NBER recession periods shaded grey</strong>.
+            Watch how the short end (3M/1Y) collapses as the Fed cuts into and through
+            recessions, while the long end (10Y) moves less — the curve typically
+            <strong> inverts before</strong> a recession and <strong>steepens</strong> coming out of one.
+          </div>
+          <div className="chart">
+            <div className="chart-head">
+              <span className="chart-title">U.S. Treasury Yields vs Recessions</span>
+              <span className="chart-sub">government bond yield (%), monthly</span>
+              <div className="chart-legend">
+                {(macro.history.tenors || []).map((t, i) => (
+                  <span key={t}><span className="swatch"
+                        style={{ background: TENOR_COLORS[i % TENOR_COLORS.length] }} />{t}</span>
+                ))}
+              </div>
+            </div>
+            <MacroHistoryChart history={macro.history} />
+          </div>
+        </div>
+      )}
+
+      {!isGlobal && gdpSel && (
+        <div className="section">
+          <div className="section-head">
+            <span className="section-num">§08.2</span>
+            <h2 className="section-title">{selCountry.name} · GDP & Growth</h2>
+            <span className="section-sub">REAL GDP GROWTH % · FADED BARS = IMF PROJECTION</span>
+          </div>
+          <div className="chart">
+            <div className="chart-head">
+              <span className="chart-title">Real GDP Growth</span>
+              <span className="chart-sub">history (solid) + IMF forward projection (faded)</span>
+            </div>
+            <MacroGrowthChart series={gdpSel.series} />
+          </div>
+          <div className="chart" style={{ padding: 0, marginTop: 14, overflowX: 'auto' }}>
+            <table className="table">
+              <thead>
+                <tr><th>Year</th><th className="num-r">GDP (PPP, int'l $ bn)</th>
+                    <th className="num-r">Real Growth</th><th>Basis</th></tr>
+              </thead>
+              <tbody>
+                {gdpSel.series.slice().reverse().map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.year}</td>
+                    <td className="num-r">{r.gdp != null ? fmtCompact(r.gdp * 1e9) : '—'}</td>
+                    <td className={`num-r ${r.growth != null ? (r.growth >= 0 ? 'pos' : 'neg') : ''}`}>
+                      {r.growth != null ? `${r.growth >= 0 ? '+' : ''}${r.growth.toFixed(1)}%` : '—'}</td>
+                    <td style={{ color: 'var(--muted)' }}>{r.proj ? 'IMF projection' : 'actual'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="section">
+        <div className="section-head">
+          <span className="section-num">§08.3</span>
+          <h2 className="section-title">GDP Weights (PPP) & Sources</h2>
+          <span className="section-sub">GOVERNMENT / OFFICIAL DATA · WEIGHTS BY PPP GDP</span>
+        </div>
+        <div className="grid grid-7">
+          {countries.map(c => (
+            <Metric key={c.code} label={c.code}
+                    value={weights[c.code] != null ? `${(weights[c.code] * 100).toFixed(1)}%` : '—'}
+                    sub="gdp weight" />
+          ))}
+        </div>
+        <div className="interp" style={{ marginTop: 14 }}>
+          <strong>Sources (all government / official):</strong>
+          <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+            {(macro.sources || []).map((s, i) => (
+              <li key={i} style={{ marginBottom: 3 }}>
+                {s.label} — <span style={{ color: 'var(--muted)' }}>{s.use}</span>
+              </li>
+            ))}
+          </ul>
+          Yields are par/benchmark government bond yields. Where a country doesn't
+          publish a given tenor, the value is linearly interpolated between its
+          reported tenors (never extrapolated) and marked accordingly.
+        </div>
+      </div>
+    </div>
+  );
+}
+window.MacroTab = MacroTab;

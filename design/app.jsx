@@ -84,6 +84,7 @@ function App() {
     { key: 'signals',      label: 'Quant Signals' },
     { key: 'fundamentals', label: 'Fundamentals' },
     { key: 'industry',     label: 'Industry Analysis' },
+    { key: 'macro',        label: 'Macro Economics' },
     { key: 'research',     label: 'Qualitative Research' },
   ];
 
@@ -120,6 +121,7 @@ function App() {
           {active === 'signals'      && <SignalsTab      data={d} themeKey={theme} />}
           {active === 'fundamentals' && <FundamentalsTab data={d} themeKey={theme} />}
           {active === 'industry'     && <IndustryTab />}
+          {active === 'macro'        && <MacroTab />}
           {active === 'research'     && <ResearchTab     data={d} fundamentals={f} research={r} themeKey={theme} />}
         </TabErrorBoundary>
       </div>
