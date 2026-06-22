@@ -281,19 +281,15 @@ def recompute_price_to_book(ticker: str, info: dict, market_cap) -> float | None
     return _price_to_book(market_cap, equity, fx)
 
 
-def _fetch_info(ticker: str, attempts: int = 3) -> dict:
-    """Fetch yfinance .info with retries. Yahoo's quoteSummary endpoint is
-    aggressively rate-limited from shared cloud IPs, so retry with backoff and
-    treat an empty/marketCap-less payload as a miss worth retrying."""
-    for i in range(attempts):
-        try:
-            info = yf.Ticker(ticker).info
-            if info and info.get("marketCap") is not None:
-                return info
-        except Exception:
-            pass
-        time.sleep(0.7 * (i + 1))
-    # Last-ditch: return whatever we have (may be partial) rather than nothing.
+def _fetch_info(ticker: str) -> dict:
+    """Single yfinance .info fetch.
+
+    IMPORTANT: do NOT retry here. get_ticker_info runs for the focus ticker
+    plus every industry peer (concurrently), so retrying .info multiplies the
+    number of Yahoo quoteSummary requests per page load and *causes* the very
+    per-IP rate-limiting that blanks the fundamentals on Streamlit Cloud. One
+    call per ticker, cached 4h by get_ticker_info, keeps request volume low.
+    """
     try:
         return yf.Ticker(ticker).info or {}
     except Exception:
