@@ -191,6 +191,8 @@ def to_js_fundamentals(info: dict) -> dict:
         "weekChange52":  s("weekChange52"),
         "currentPrice":  s("currentPrice"),
         "dividendYield": s("dividendYield"),
+        "shortPercentOfFloat": s("shortPercentOfFloat"),
+        "shortRatio":    s("shortRatio"),
     }
 
 

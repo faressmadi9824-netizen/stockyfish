@@ -172,7 +172,10 @@ def _imf_indicator(indicator: str) -> dict:
     isos = [v[1] for v in G7.values()]
     out: dict = {}
     try:
-        r = requests.get(f"{IMF_BASE}/{indicator}/" + "/".join(isos), timeout=25)
+        # IMF blocks the default python-requests user-agent, so present a browser
+        # UA (otherwise the call 403s and GDP comes back empty).
+        r = requests.get(f"{IMF_BASE}/{indicator}/" + "/".join(isos), timeout=25,
+                         headers={"User-Agent": "Mozilla/5.0 (compatible; dashboard/1.0)"})
         r.raise_for_status()
         block = (r.json().get("values", {}) or {}).get(indicator, {})
         for iso in isos:
@@ -182,6 +185,39 @@ def _imf_indicator(indicator: str) -> dict:
     except Exception:
         pass
     return out
+
+
+WB_BASE = "https://api.worldbank.org/v2"
+
+
+@_cache(ttl=60 * 60 * 12)
+def _worldbank(indicator: str, scale: float = 1.0) -> dict:
+    """{iso3: {year(int): value}} for the G7 from the World Bank API.
+
+    Independent fallback for when the IMF API is unavailable. World Bank is
+    historical only (no forward projections). `scale` converts units (e.g. WB
+    GDP is full dollars; IMF PPPGDP is billions, so scale=1e-9 to match)."""
+    isos = ";".join(v[1] for v in G7.values())
+    out: dict = {}
+    try:
+        r = requests.get(f"{WB_BASE}/country/{isos}/indicator/{indicator}",
+                         params={"format": "json", "per_page": 600, "date": "2000:2030"},
+                         timeout=25,
+                         headers={"User-Agent": "Mozilla/5.0 (compatible; dashboard/1.0)"})
+        r.raise_for_status()
+        payload = r.json()
+        rows = payload[1] if isinstance(payload, list) and len(payload) > 1 else []
+        for row in rows or []:
+            iso, v, d = row.get("countryiso3code"), row.get("value"), row.get("date")
+            if iso and v is not None and d:
+                out.setdefault(iso, {})[int(d)] = float(v) * scale
+    except Exception:
+        pass
+    return out
+
+
+def _has_data(d: dict) -> bool:
+    return bool(d) and any(v for v in d.values())
 
 
 # ---------------------------------------------------------------------------
@@ -337,8 +373,14 @@ def to_js_macro(demo: bool | None = None) -> dict:
         curves_by_code[code] = {r["tenor"]: r["y"] for r in curve}
         countries.append({"code": code, "name": name, "source": src, "curve": curve})
 
-    gdp_levels = _imf_indicator("PPPGDP")      # GDP at PPP (weights + display)
+    # GDP at PPP (weights + display). IMF preferred (has projections); fall back
+    # to the World Bank if the IMF API is unavailable so GDP never goes blank.
+    gdp_levels = _imf_indicator("PPPGDP")
+    if not _has_data(gdp_levels):
+        gdp_levels = _worldbank("NY.GDP.MKTP.PP.CD", scale=1e-9)  # WB $ → billions
     growth = _imf_indicator("NGDP_RPCH")       # real GDP growth %, hist + projections
+    if not _has_data(growth):
+        growth = _worldbank("NY.GDP.MKTP.KD.ZG")  # WB growth %, historical only
 
     # GDP weights from the latest available actual year (PPP basis)
     weights = _gdp_weights(gdp_levels)

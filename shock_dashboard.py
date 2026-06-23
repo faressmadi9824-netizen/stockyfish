@@ -61,6 +61,7 @@ except Exception:
 from design_renderer import (build_html, to_js_data, to_js_fundamentals,
                              to_js_industry, to_js_tape)
 from macro_data import to_js_macro
+from fundamentals_keyed import build_info_keyed, finnhub_key
 from quant_signals import (build_quant_payload, extract_earnings_drivers,
                            fetch_credit_metrics, fetch_fundamental_history,
                            fetch_sec_filing_sections)
@@ -298,6 +299,17 @@ def _fetch_info(ticker: str) -> dict:
 
 @st.cache_data(show_spinner=False, ttl=60 * 60 * 4)
 def get_ticker_info(ticker: str) -> dict:
+    # Cloud-safe path: when a FINNHUB_API_KEY is configured (i.e. on the deployed
+    # server), source fundamentals from Finnhub — Yahoo blocks .info from cloud
+    # IPs. Locally, with no key set, this is skipped and the original yfinance
+    # path below runs exactly as before, so the local app is unchanged.
+    try:
+        if finnhub_key():
+            _keyed = build_info_keyed(ticker)
+            if _keyed.get("marketCap") is not None:
+                return _keyed
+    except Exception:
+        pass
     try:
         info = _fetch_info(ticker)
         if not info:
@@ -388,6 +400,9 @@ def get_ticker_info(ticker: str) -> dict:
             "twoHundredDayAverage": info.get("twoHundredDayAverage"),
             "beta":                info.get("beta"),
             "weekChange52":        info.get("52WeekChange"),
+            # Short interest
+            "shortPercentOfFloat": info.get("shortPercentOfFloat"),
+            "shortRatio":          info.get("shortRatio"),
             # Analyst consensus (Refinitiv)
             "targetMeanPrice":          info.get("targetMeanPrice"),
             "targetHighPrice":          info.get("targetHighPrice"),
@@ -1371,7 +1386,9 @@ def embed_html(html: str, height: int) -> None:
     still runs locally on an older install.
     """
     if hasattr(st, "iframe"):
-        st.iframe(html, height=height)
+        # height="content" auto-sizes the iframe to the rendered content, so
+        # short tabs don't leave a fixed-height grey block/gap underneath.
+        st.iframe(html, height="content")
     else:
         components.html(html, height=height, scrolling=False)
 
