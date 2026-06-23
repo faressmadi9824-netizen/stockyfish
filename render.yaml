@@ -1,0 +1,16 @@
+# Render Blueprint — deploys the dashboard as a web service with a dedicated
+# IP (so yfinance's .info endpoint isn't blocked like it is on Streamlit Cloud).
+# In Render: New + → Blueprint → connect this repo → it reads this file.
+# You'll be asked to enter FRED_API_KEY (for the Macro tab) during setup.
+services:
+  - type: web
+    name: stockyfish
+    runtime: python
+    plan: free                # change to "starter" ($7/mo) to avoid idle spin-down
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run shock_dashboard.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"        # pinned to avoid the 3.13/3.14 source-introspection bug
+      - key: FRED_API_KEY
+        sync: false            # you'll paste your FRED key in the Render dashboard
