@@ -255,7 +255,7 @@ function FundamentalsStrip({ f, price }) {
           <h2 className="section-title">Analyst &amp; Technical</h2>
           <span className="section-sub">{f.numberOfAnalystOpinions ?? '—'} ANALYSTS · BUY CONSENSUS</span>
         </div>
-        <div className="grid grid-7">
+        <div className="grid grid-8">
           <Metric label="EPS (TTM)" value={fmtD(f.trailingEps)} sub="" />
           <Metric label="Fwd EPS" value={fmtD(f.forwardEps)} sub="ntm" />
           <Metric label="Price Target" value={fmtD(f.targetMeanPrice)} sub="analyst mean" />
@@ -266,6 +266,8 @@ function FundamentalsStrip({ f, price }) {
                   sub={f.fiftyTwoWeekHigh != null && price ? `${(((price / f.fiftyTwoWeekHigh) - 1) * 100).toFixed(1)}% from high` : ''} />
           <Metric label="52W Low" value={fmtD(f.fiftyTwoWeekLow)}
                   sub={f.fiftyTwoWeekLow != null && price ? `+${(((price / f.fiftyTwoWeekLow) - 1) * 100).toFixed(1)}% off low` : ''} />
+          <Metric label="Short % Float" value={fmtP(f.shortPercentOfFloat)}
+                  sub={f.shortRatio != null ? `${f.shortRatio.toFixed(1)}d to cover` : 'short interest'} />
         </div>
       </div>
     </div>

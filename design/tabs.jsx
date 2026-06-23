@@ -1334,15 +1334,30 @@ function MacroHistoryChart({ history }) {
   const W = 960, H = 340, padL = 44, padR = 14, padT = 14, padB = 28;
   const series = (history && history.series) || [];
   const tenors = (history && history.tenors) || [];
+  const [hidden, setHidden] = useStateT({});
   if (series.length < 2) return <div className="interp">No rate history available.</div>;
+
+  const colorOf = t => TENOR_COLORS[tenors.indexOf(t) % TENOR_COLORS.length];
+  const visible = tenors.filter(t => !hidden[t]);
+  // Click = isolate that tenor; click the already-isolated one = show all again.
+  const onClick = t => setHidden(() => {
+    const onlyThis = visible.length === 1 && visible[0] === t;
+    if (onlyThis) return {};
+    const h = {}; tenors.forEach(x => { if (x !== t) h[x] = true; });
+    return h;
+  });
+  // Shift/ctrl-style additive toggle via the small × — simple toggle on the dot.
+  const toggleOne = t => setHidden(h => ({ ...h, [t]: !h[t] }));
+
   const tnum = d => { const p = d.split('-'); return (+p[0]) + (+p[1] - 1) / 12; };
   const xs = series.map(s => tnum(s.d));
   const xmin = xs[0], xmax = xs[xs.length - 1];
   let lo = Infinity, hi = -Infinity;
-  series.forEach(s => tenors.forEach(t => {
+  series.forEach(s => visible.forEach(t => {
     const v = s.vals[t]; if (v != null) { if (v < lo) lo = v; if (v > hi) hi = v; }
   }));
-  lo = Math.min(lo, 0); hi = hi * 1.05;
+  if (!isFinite(lo)) { lo = 0; hi = 1; }
+  lo = Math.min(lo, 0); hi = hi * 1.05 || 1;
   const X = v => padL + ((v - xmin) / (xmax - xmin)) * (W - padL - padR);
   const Y = v => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
   const recs = history.recessions || [];
@@ -1357,29 +1372,51 @@ function MacroHistoryChart({ history }) {
     });
     return d;
   };
+  const legSpan = (t) => ({
+    cursor: 'pointer', userSelect: 'none', opacity: hidden[t] ? 0.32 : 1,
+    fontWeight: (visible.length === 1 && visible[0] === t) ? 700 : 400,
+  });
+
   return (
-    <svg className="chart-svg" viewBox={`0 0 ${W} ${H}`} role="img">
-      {recs.map((r, i) => {
-        const x1 = X(tnum(r.start)), x2 = X(tnum(r.end));
-        return <rect key={i} x={x1} y={padT} width={Math.max(x2 - x1, 1.5)}
-                     height={H - padT - padB} fill="var(--muted)" opacity="0.18" />;
-      })}
-      {gridY.map((g, i) => (
-        <g key={i}>
-          <line x1={padL} x2={W - padR} y1={Y(g)} y2={Y(g)} stroke="var(--line-soft)" strokeWidth="1" />
-          <text x={padL - 6} y={Y(g) + 3} textAnchor="end" fontSize="9.5"
-                fill="var(--muted)" fontFamily="IBM Plex Mono, monospace">{g.toFixed(1)}</text>
-        </g>
-      ))}
-      {years.map((y, i) => (
-        <text key={i} x={X(y)} y={H - 9} textAnchor="middle" fontSize="9.5"
-              fill="var(--muted)" fontFamily="IBM Plex Mono, monospace">{y}</text>
-      ))}
-      {tenors.map((t, i) => (
-        <path key={t} d={linePath(t)} fill="none"
-              stroke={TENOR_COLORS[i % TENOR_COLORS.length]} strokeWidth="1.4" opacity="0.92" />
-      ))}
-    </svg>
+    <div>
+      <div className="chart-legend" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+        {tenors.map(t => (
+          <span key={t} style={legSpan(t)} onClick={() => onClick(t)}
+                title="click to isolate · double-click dot to toggle">
+            <span className="swatch" style={{ background: colorOf(t), cursor: 'pointer' }}
+                  onClick={(e) => { e.stopPropagation(); toggleOne(t); }} />{t}
+          </span>
+        ))}
+        {visible.length !== tenors.length && (
+          <span style={{ cursor: 'pointer', color: 'var(--accent)', marginLeft: 6 }}
+                onClick={() => setHidden({})}>show all</span>
+        )}
+      </div>
+      <svg className="chart-svg" viewBox={`0 0 ${W} ${H}`} role="img">
+        {recs.map((r, i) => {
+          const s = tnum(r.start), e = tnum(r.end);
+          if (e < xmin || s > xmax) return null;        // recession outside data range
+          const x1 = X(Math.max(s, xmin)), x2 = X(Math.min(e, xmax));
+          return <rect key={i} x={x1} y={padT} width={Math.max(x2 - x1, 1.5)}
+                       height={H - padT - padB} fill="var(--muted)" opacity="0.18" />;
+        })}
+        {gridY.map((g, i) => (
+          <g key={i}>
+            <line x1={padL} x2={W - padR} y1={Y(g)} y2={Y(g)} stroke="var(--line-soft)" strokeWidth="1" />
+            <text x={padL - 6} y={Y(g) + 3} textAnchor="end" fontSize="9.5"
+                  fill="var(--muted)" fontFamily="IBM Plex Mono, monospace">{g.toFixed(1)}</text>
+          </g>
+        ))}
+        {years.map((y, i) => (
+          <text key={i} x={X(y)} y={H - 9} textAnchor="middle" fontSize="9.5"
+                fill="var(--muted)" fontFamily="IBM Plex Mono, monospace">{y}</text>
+        ))}
+        {visible.map(t => (
+          <path key={t} d={linePath(t)} fill="none"
+                stroke={colorOf(t)} strokeWidth="1.6" opacity="0.92" />
+        ))}
+      </svg>
+    </div>
   );
 }
 
@@ -1469,13 +1506,7 @@ function MacroTab() {
           <div className="chart">
             <div className="chart-head">
               <span className="chart-title">U.S. Treasury Yields vs Recessions</span>
-              <span className="chart-sub">government bond yield (%), monthly</span>
-              <div className="chart-legend">
-                {(macro.history.tenors || []).map((t, i) => (
-                  <span key={t}><span className="swatch"
-                        style={{ background: TENOR_COLORS[i % TENOR_COLORS.length] }} />{t}</span>
-                ))}
-              </div>
+              <span className="chart-sub">click a tenor to isolate it · click its dot to toggle on/off</span>
             </div>
             <MacroHistoryChart history={macro.history} />
           </div>

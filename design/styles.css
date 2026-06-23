@@ -500,6 +500,7 @@ html, body {
   background: var(--line-soft);
   border: 1px solid var(--line-soft);
 }
+.grid-8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 .grid-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -825,6 +826,35 @@ html, body {
   .price-stack { align-items: flex-start; }
   .layout-2col { grid-template-columns: 1fr; }
   .sidebar { border-left: none; padding-left: 0; border-top: 1px solid var(--line-soft); padding-top: 24px; }
+  .grid-8 { grid-template-columns: repeat(4, 1fr); }
   .grid-7 { grid-template-columns: repeat(3, 1fr); }
   .grid-5 { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ── Tablet / large phone ───────────────────────────────── */
+@media (max-width: 720px) {
+  .container { padding: 0 16px; }
+  .grid-8, .grid-7, .grid-5, .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  /* Tab bar scrolls horizontally instead of cramming 7 tabs */
+  .tabs-row { overflow-x: auto; -webkit-overflow-scrolling: touch;
+              flex-wrap: nowrap; scrollbar-width: none; }
+  .tabs-row::-webkit-scrollbar { display: none; }
+  .tab { flex: 0 0 auto; padding: 0 12px; }
+  /* Wide tables scroll horizontally inside their card instead of overflowing */
+  .chart { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table { min-width: 540px; }
+}
+
+/* ── Phone ──────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .container { padding: 0 12px; }
+  .grid-8, .grid-7, .grid-5, .grid-4, .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .metric { padding: 12px 14px; }
+  .metric-value { font-size: 18px; }
+  .metric-value.lg { font-size: 22px; }
+  .metric-value.sm { font-size: 14px; }
+  .metric-label { font-size: 9px; }
+  .section-title { font-size: 12px; }
+  .section-sub { display: none; }   /* free header space on tiny screens */
+  .tab { font-size: 11px; padding: 0 10px; }
 }
